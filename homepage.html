@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saapaadu</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Abril+Fatface&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    height: 100%;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: #1a1a1a;
+    color: white;
+}
+
+/* Header styling */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background-color: #a2e759;
+    width: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+    height: 60px;
+}
+
+.logo {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #7c5295;
+}
+
+nav {
+    display: flex;
+    gap: 20px;
+}
+
+.nav-link {
+    color: #0066cc;
+    text-decoration: none;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.nav-link:hover {
+    color: #4a6cd1;
+    transform: translateY(-2px);
+}
+
+.nav-link::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 2px;
+    bottom: -5px;
+    left: 0;
+    background-color: #4a6cd1;
+    transition: width 0.3s ease;
+}
+
+.nav-link:hover::after {
+    width: 100%;
+}
+
+/* Section styling for full viewport height */
+.section {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    position: relative;
+    overflow: hidden;
+}
+
+.content-wrapper {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+/* Hero section styling */
+.hero .content-wrapper {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.burger-container, .hero-text {
+    flex: 1;
+    transition: transform 0.3s ease-out;
+    will-change: transform;
+}
+
+.burger-img {
+    max-width: 100%;
+    width: 300px;
+    height: auto;
+}
+
+.hero-text {
+    background-color: #f2d32c;
+    padding: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    width: 300px;
+    height: 300px;
+}
+
+.hero-text h1 {
+    color: #333;
+    font-size: 2.5rem;
+    font-weight: bold;
+    text-align: center;
+}
+
+/* Features section styling */
+.features .content-wrapper {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.price-container, .jar-container {
+    flex: 1;
+    opacity: 0;
+    transform: translateX(-100px);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+.jar-container {
+    transform: translateX(100px);
+}
+
+/* Animation classes that get added when elements enter viewport */
+.slide-in-left {
+    opacity: 1 !important;
+    transform: translateX(0) !important;
+}
+
+.slide-in-right {
+    opacity: 1 !important;
+    transform: translateX(0) !important;
+}
+
+.price-container {
+    background-color: #ff9257;
+    padding: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    width: 300px;
+    height: 200px;
+}
+
+.price-container h2 {
+    color: #028476;
+    font-size: 2rem;
+    font-weight: bold;
+    text-align: center;
+}
+
+.jar-img {
+    max-width: 100%;
+    width: 250px;
+    height: auto;
+}
+
+/* Quality section styling */
+.quality .content-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.vegetables-container {
+    width: 100%;
+    text-align: center;
+    margin-bottom: 30px;
+    opacity: 0;
+    transform: translateY(50px);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+.slide-in-bottom {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+}
+
+.vegetables-img {
+    max-width: 80%;
+    width: 400px;
+    height: auto;
+}
+
+.quality-text {
+    background-color: #4caf50;
+    padding: 20px;
+    width: 100%;
+    max-width: 600px;
+    text-align: center;
+    border-radius: 10px;
+    opacity: 0;
+    transform: translateY(-50px);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+.slide-in-top {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+}
+
+.quality-text h2 {
+    color: white;
+    font-family: 'Abril Fatface', cursive;
+    font-size: 2.5rem;
+}
+
+/* CTA section styling */
+.cta .content-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.start-button {
+    background-color: #00bcd4;
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    border-radius: 5px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.5s ease;
+}
+
+.pulse-animate {
+    opacity: 1 !important;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(0, 188, 212, 0.7);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 0 0 10px rgba(0, 188, 212, 0);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(0, 188, 212, 0);
+    }
+}
+
+/* Financial section styling */
+.financial {
+    background-color: #a2e759;
+    min-height: 40vh;
+}
+
+.financial .content-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.strategy-text {
+    text-align: center;
+    opacity: 0;
+    transition: opacity 1s ease;
+}
+
+.fade-in {
+    opacity: 1 !important;
+}
+
+.strategy-text p {
+    color: #333;
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+}
+
+.strategy-text h2 {
+    color: #4a6cd1;
+    font-size: 3rem;
+    font-weight: bold;
+}
+
+/* Cursor Animation */
+.cursor-animate {
+    transition: transform 0.2s ease-out;
+    will-change: transform;
+}
+
+.animate-on-scroll {
+}
+@media (max-width: 768px) {
+    .hero .content-wrapper, 
+    .features .content-wrapper {
+        flex-direction: column;
+        gap: 30px;
+    }
+    
+    .hero-text, .price-container {
+        width: 100%;
+        max-width: 300px;
+        margin: 0 auto;
+    }
+    
+    .burger-img, .jar-img, .vegetables-img {
+        width: 100%;
+        max-width: 250px;
+    }
+    
+    .section {
+        padding: 80px 20px;
+    }
+}
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">Saapaadu</div>
+        <nav>
+            <a href="homepage.html" class="nav-link">Home</a>
+            <a href="login.php" class="nav-link">Login</a>
+            <a href="signup.php" class="nav-link">Sign Up</a>
+            <a href="#" class="nav-link">Contact</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="section hero" id="hero-section">
+            <div class="content-wrapper">
+                <div class="burger-container cursor-animate">
+                    <img src="https://static.vecteezy.com/system/resources/thumbnails/022/787/357/small_2x/flying-burger-on-a-transparent-background-generative-ai-png.png" alt="Delicious burgers" class="burger-img">
+                </div>
+                <div class="hero-text cursor-animate">
+                    <h1>SAAPAADU<br>ANYTIME<br>ANYWHERE</h1>
+                </div>
+            </div>
+        </section>
+
+        <section class="section features" id="features-section">
+            <div class="content-wrapper">
+                <div class="price-container animate-on-scroll" data-animation="slide-in-left">
+                    <h2>AFFORDABLE<br>PRICE</h2>
+                </div>
+                <div class="jar-container animate-on-scroll" data-animation="slide-in-right">
+                    <img src="https://static.vecteezy.com/system/resources/previews/020/001/094/non_2x/savings-graphic-clipart-design-free-png.png" alt="Jar with coins" class="jar-img">
+                </div>
+            </div>
+        </section>
+
+        <section class="section quality" id="quality-section">
+            <div class="content-wrapper">
+                <div class="vegetables-container animate-on-scroll" data-animation="slide-in-bottom">
+                    <img src="https://th.bing.com/th/id/R.2d4697ff6093bccd3a3fbb41daadc5d0?rik=TeTosU4XYbEHAQ&riu=http%3a%2f%2fpluspng.com%2fimg-png%2ffruit-water-splash-png-clipart-png-image-1123.png&ehk=7keL3zbqVh531k%2bo4pxrcPexc7aYUvNuValUpxn0pLw%3d&risl=&pid=ImgRaw&r=0" alt="Fresh vegetables" class="vegetables-img">
+                </div>
+                <div class="quality-text animate-on-scroll" data-animation="slide-in-top">
+                    <h2>Unmatched<br>quality</h2>
+                </div>
+            </div>
+        </section>
+
+        <section class="section cta" id="cta-section">
+            <div class="content-wrapper">
+                <button class="start-button animate-on-scroll" data-animation="pulse-animate">START NOW</button>
+            </div>
+        </section>
+
+        <section class="section financial" id="financial-section">
+            <div class="content-wrapper">
+                <div class="strategy-text animate-on-scroll" data-animation="fade-in">
+                    <p>financial</p>
+                    <h2>STRATEGY</h2>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Cursor-based animation for hero section
+        document.addEventListener('DOMContentLoaded', function() {
+            // Cursor movement tracking for hero section
+            const cursorElements = document.querySelectorAll('.cursor-animate');
+            
+            document.addEventListener('mousemove', function(e) {
+                const x = e.clientX / window.innerWidth - 0.5;
+                const y = e.clientY / window.innerHeight - 0.5;
+                
+                cursorElements.forEach(element => {
+                    element.style.transform = `translate(${x * 20}px, ${y * 20}px)`;
+                });
+            });
+
+            // Enhanced Intersection Observer for scroll animations
+            const animateOnScrollElements = document.querySelectorAll('.animate-on-scroll');
+            
+            const observerOptions = {
+                root: null, // viewport is the root
+                rootMargin: '0px', // no margin
+                threshold: 0.2 // trigger when 20% of the element is visible
+            };
+            
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const element = entry.target;
+                        const animation = element.dataset.animation;
+                        element.classList.add(animation);
+                        
+                        // Unobserve after animation is triggered
+                        observer.unobserve(element);
+                    }
+                });
+            }, observerOptions);
+            
+            // Observe all elements with animations
+            animateOnScrollElements.forEach(el => {
+                observer.observe(el);
+            });
+        });
+    </script>
+</body>
+</html> 
