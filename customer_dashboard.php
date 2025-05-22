@@ -32,7 +32,7 @@ $debug_counts = [
 ];
 
 // Get customer location information (if available)
-$customer_id = $_SESSION['user_id'] ?? 0;
+$customer_id = $_SESSION['id'] ?? 0;
 $customer_location = ['area' => '', 'city' => ''];
 
 if ($customer_id > 0) {
@@ -133,11 +133,11 @@ foreach ($raw_vendors as $vendor) {
 // Get actual hotspots with simplified logic
 if ($emergency_debug) {
     // Use a very simple query that should return all hotspots
-    $preference = $_SESSION['dietary_preference'] ?? 'Veg'; // fallback to Veg
-    $simple_query = "SELECT vp.*, fi.* 
-                    FROM vendor_profiles vp
-                    JOIN food_items fi ON vp.id = fi.vendor_id
-                    WHERE fi.food_type = ?";
+    $preference = $food_preference; // Use the URL parameter preference instead
+    $simple_query = "SELECT vp.*, fi.*, vp.id as vendor_profile_id, fi.id as food_item_id
+            FROM vendor_profiles vp
+            JOIN food_items fi ON vp.id = fi.vendor_id
+            WHERE fi.food_type = ?";
     $stmt = $conn->prepare($simple_query);
     $stmt->bind_param("s", $preference);
     $stmt->execute();
@@ -147,23 +147,25 @@ if ($emergency_debug) {
     while ($row = $result->fetch_assoc()) {
         // Create a nicely formatted hotspot object
         $hotspot = [
-            'id' => $row['id'],
-            'user_id' => $row['user_id'],
-            'vendor_name' => $row['full_name'],
-            'shop_name' => $row['shop_name'],
-            'food_type' => $row['food_type'],
-            'address' => $row['shop_no'] . ', ' . $row['street'] . ', ' . $row['area'] . ', ' . $row['city'],
-            'area' => $row['area'],
-            'city' => $row['city'],
-            'latitude' => $row['latitude'],
-            'longitude' => $row['longitude'],
-            'food_id' => $row['id'],
-            'food_item' => $row['food_name'],
-            'meal_count' => $row['meal_count'],
-            'price' => $row['price'],
-            'available_until' => $row['available_until'],
-            'hours_left' => 1 // Default value
-        ];
+    'food_item_id' => $row['food_item_id'],  // Food item ID
+    'vendor_profile_id' => $row['vendor_profile_id'],  // Vendor profile ID
+    'vendor_id' => $row['vendor_id'],    
+    'user_id' => $row['user_id'],  // User ID
+    'vendor_name' => $row['full_name'],
+    'shop_name' => $row['shop_name'],
+    'food_type' => $row['food_type'],
+    'address' => $row['shop_no'] . ', ' . $row['street'] . ', ' . $row['area'] . ', ' . $row['city'],
+    'area' => $row['area'],
+    'city' => $row['city'],
+    'latitude' => $row['latitude'],
+    'longitude' => $row['longitude'],
+    'food_id' => $row['food_item_id'],  // Use the aliased food_item_id
+    'food_item' => $row['food_name'],
+    'meal_count' => $row['meal_count'],
+    'price' => $row['price'],
+    'available_until' => $row['available_until'],
+    'hours_left' => 1 // Default value
+];
         
         // Try to calculate hours left
         try {
@@ -616,35 +618,45 @@ ul li{
     <!-- Modal for detailed hotspot information -->
     <div class="modal-overlay" id="hotspotModal">
         <div class="modal-content">
-            <span class="modal-close" onclick="closeModal()">&times;</span>
-            <h2 class="modal-title" id="modalTitle"></h2>
-            <div class="modal-info">
-                <span class="modal-label">Food Type:</span>
-                <span id="modalFoodType"></span>
-            </div>
-            <div class="modal-info">
-                <span class="modal-label">Food Item:</span>
-                <span id="modalFoodItem"></span>
-            </div>
-            <div class="modal-info">
-                <span class="modal-label">Address:</span>
-                <span id="modalAddress"></span>
-            </div>
-            <div class="modal-info">
-                <span class="modal-label">Available Meals:</span>
-                <span id="modalMealCount"></span>
-            </div>
-            <div class="modal-info">
-                <span class="modal-label">Time Left:</span>
-                <span id="modalTimer"></span>
-            </div>
-            <div class="modal-info">
-                <span class="modal-label">Price:</span>
-                <span id="modalPrice"></span>
-            </div>
-        </div>
+    <span class="modal-close" onclick="closeModal()">&times;</span>
+    <h2 class="modal-title" id="modalTitle"></h2>
+    <div class="modal-info">
+        <span class="modal-label">Food Type:</span>
+        <span id="modalFoodType"></span>
     </div>
-    <footer>
+    <div class="modal-info">
+        <span class="modal-label">Food Item:</span>
+        <span id="modalFoodItem"></span>
+    </div>
+    <div class="modal-info">
+        <span class="modal-label">Address:</span>
+        <span id="modalAddress"></span>
+    </div>
+    <div class="modal-info">
+        <span class="modal-label">Available Meals:</span>
+        <span id="modalMealCount"></span>
+    </div>
+    <div class="modal-info">
+        <span class="modal-label">Time Left:</span>
+        <span id="modalTimer"></span>
+    </div>
+    <div class="modal-info">
+        <span class="modal-label">Price:</span>
+        <span id="modalPrice"></span>
+    </div>
+    
+    <!-- New booking section -->
+    <div class="booking-section" style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #ddd;">
+        <div class="booking-controls" style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 15px;">
+            <button onclick="decrementQuantity()" style="background-color: #ff4444; color: white; border: none; border-radius: 50%; width: 30px; height: 30px; font-size: 18px; cursor: pointer;">-</button>
+            <span id="bookingQuantity" style="font-size: 18px; font-weight: bold;">1</span>
+            <button onclick="incrementQuantity()" style="background-color: #00aa00; color: white; border: none; border-radius: 50%; width: 30px; height: 30px; font-size: 18px; cursor: pointer;">+</button>
+        </div>
+        <button id="bookButton" onclick="bookMeal()" style="background-color: #7c5295; color: white; border: none; border-radius: 10px; padding: 12px 30px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%;">Book Now</button>
+    </div>
+</div>
+    </div>
+    <!--<footer>
             <div id="made_by">Crafted by</div>
             <div class="founders">DWARAGESH C
                 <ul class="links">
@@ -673,7 +685,7 @@ ul li{
                         </a></li>
                 </ul>
             </div>
-        </footer>
+        </footer>-->
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
@@ -768,30 +780,78 @@ ul li{
         });
 
         // Show hotspot details in modal
-        function showHotspotDetails(hotspot) {
-            // If hotspot is passed as a string (from onclick attribute), parse it
-            if (typeof hotspot === 'string') {
-                hotspot = JSON.parse(hotspot);
-            }
-            
-            // Center map on selected hotspot and open its popup
-            if (markers[hotspot.food_id]) {
-                map.setView(markers[hotspot.food_id].getLatLng(), 16);
-                markers[hotspot.food_id].openPopup();
-            }
-            
-            // Populate modal with hotspot details
-            document.getElementById('modalTitle').textContent = hotspot.shop_name;
-            document.getElementById('modalFoodType').textContent = hotspot.food_type;
-            document.getElementById('modalFoodItem').textContent = hotspot.food_item || 'Not specified';
-            document.getElementById('modalAddress').textContent = hotspot.address;
-            document.getElementById('modalMealCount').textContent = hotspot.meal_count || 'Unknown';
-            document.getElementById('modalTimer').textContent = hotspot.hours_left + ' Hour' + (hotspot.hours_left != 1 ? 's' : '') + ' left';
-            document.getElementById('modalPrice').textContent = hotspot.price ? '₹' + hotspot.price : 'Not specified';
-            
-            // Show modal
-            document.getElementById('hotspotModal').style.display = 'flex';
+       function showHotspotDetails(hotspot) {
+    console.log("=== HOTSPOT DETAILS DEBUG ===");
+    console.log("Raw hotspot data received:", hotspot);
+    console.log("Type of hotspot:", typeof hotspot);
+    
+    // If hotspot is passed as a string (from onclick attribute), parse it
+    if (typeof hotspot === 'string') {
+        try {
+            hotspot = JSON.parse(hotspot);
+            console.log("Parsed hotspot data:", hotspot);
+        } catch (e) {
+            console.error("Failed to parse hotspot data:", e);
+            alert("Error loading hotspot details");
+            return;
         }
+    }
+    
+    // Log all available properties
+    console.log("Available hotspot properties:", Object.keys(hotspot));
+    console.log("food_item_id:", hotspot.food_item_id);
+    console.log("food_id:", hotspot.food_id);
+    console.log("vendor_id:", hotspot.vendor_id);
+    console.log("vendor_profile_id:", hotspot.vendor_profile_id);
+    
+    currentHotspot = hotspot;
+    maxAvailable = parseInt(hotspot.meal_count) || 0;
+    bookingQuantity = 1;
+    
+    console.log("Set currentHotspot:", currentHotspot);
+    console.log("Max available meals:", maxAvailable);
+    
+    // Center map on selected hotspot and open its popup
+    const foodId = hotspot.food_item_id || hotspot.food_id || hotspot.id;
+    console.log("Looking for marker with ID:", foodId);
+    
+    if (markers[foodId]) {
+        map.setView(markers[foodId].getLatLng(), 16);
+        markers[foodId].openPopup();
+    } else {
+        console.log("No marker found for ID:", foodId);
+        console.log("Available marker IDs:", Object.keys(markers));
+    }
+    
+    // Populate modal with hotspot details
+    document.getElementById('modalTitle').textContent = hotspot.shop_name || 'Unknown Shop';
+    document.getElementById('modalFoodType').textContent = hotspot.food_type || 'Unknown';
+    document.getElementById('modalFoodItem').textContent = hotspot.food_item || 'Not specified';
+    document.getElementById('modalAddress').textContent = hotspot.address || 'Address not available';
+    document.getElementById('modalMealCount').textContent = hotspot.meal_count || '0';
+    document.getElementById('modalTimer').textContent = (hotspot.hours_left || 0) + ' Hour' + (hotspot.hours_left != 1 ? 's' : '') + ' left';
+    document.getElementById('modalPrice').textContent = hotspot.price ? '₹' + hotspot.price : 'Not specified';
+    
+    // Reset booking controls
+    document.getElementById('bookingQuantity').textContent = '1';
+    const bookButton = document.getElementById('bookButton');
+    
+    if (maxAvailable > 0) {
+        bookButton.disabled = false;
+        bookButton.textContent = 'Book Now';
+        bookButton.style.backgroundColor = '#7c5295';
+    } else {
+        bookButton.disabled = true;
+        bookButton.textContent = 'Sold Out';
+        bookButton.style.backgroundColor = '#999999';
+    }
+    
+    // Show modal
+    document.getElementById('hotspotModal').style.display = 'flex';
+    
+    console.log("Modal populated and displayed");
+    console.log("=== END HOTSPOT DETAILS DEBUG ===");
+}
 
         // Close modal function
         function closeModal() {
@@ -812,6 +872,114 @@ ul li{
       footer.scrollIntoView({ behavior: "smooth" });
     });
   });
+  let currentHotspot = null;
+let bookingQuantity = 1;
+let maxAvailable = 0;
+
+function incrementQuantity() {
+    if (bookingQuantity < maxAvailable) {
+        bookingQuantity++;
+        document.getElementById('bookingQuantity').textContent = bookingQuantity;
+    }
+}
+
+function decrementQuantity() {
+    if (bookingQuantity > 1) {
+        bookingQuantity--;
+        document.getElementById('bookingQuantity').textContent = bookingQuantity;
+    }
+}
+
+function bookMeal() {
+    if (!currentHotspot) {
+        alert('No hotspot selected');
+        return;
+    }
+    
+    // Debug: Log the current hotspot data
+    console.log("=== BOOKING DEBUG ===");
+    console.log("Current hotspot data:", currentHotspot);
+    console.log("Available properties:", Object.keys(currentHotspot));
+    
+    // Extract values with fallbacks for different possible property names
+    const foodId = currentHotspot.food_item_id || currentHotspot.food_id || currentHotspot.id || 0;
+    const vendorId = currentHotspot.vendor_id || currentHotspot.vendor_profile_id || 0;
+    const quantity = bookingQuantity || 1;
+    
+    console.log("Extracted values:");
+    console.log("- foodId:", foodId);
+    console.log("- vendorId:", vendorId);
+    console.log("- quantity:", quantity);
+    console.log("=== END BOOKING DEBUG ===");
+    
+    // Validate values before sending
+    if (foodId <= 0 || vendorId <= 0 || quantity <= 0) {
+        alert('Error: Invalid booking data. Please try selecting the item again.');
+        console.error("Invalid values detected:", {foodId, vendorId, quantity});
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('food_id', foodId);
+    formData.append('quantity', quantity);
+    formData.append('vendor_id', vendorId);
+    
+    // Disable the book button to prevent multiple clicks
+    const bookButton = document.getElementById('bookButton');
+    bookButton.disabled = true;
+    bookButton.textContent = 'Booking...';
+    
+    fetch('book_meal.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log("Server response:", data);
+        
+        if (data.success) {
+            alert('Booking successful!');
+            // Update the meal count in the current display
+            currentHotspot.meal_count -= bookingQuantity;
+            document.getElementById('modalMealCount').textContent = currentHotspot.meal_count;
+            
+            // Reset booking quantity
+            bookingQuantity = 1;
+            document.getElementById('bookingQuantity').textContent = '1';
+            
+            // If no meals left, disable booking
+            if (currentHotspot.meal_count <= 0) {
+                bookButton.disabled = true;
+                bookButton.textContent = 'Sold Out';
+            } else {
+                bookButton.disabled = false;
+                bookButton.textContent = 'Book Now';
+            }
+            
+            closeModal();
+            
+            // Optionally reload the page to refresh all data
+            // location.reload();
+        } else {
+            alert('Booking failed: ' + (data.message || 'Unknown error'));
+            // Re-enable the button
+            bookButton.disabled = false;
+            bookButton.textContent = 'Book Now';
+            
+            // If debug data is available, show it
+            if (data.debug) {
+                console.log("Debug data from server:", data.debug);
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Booking failed. Please try again.');
+        // Re-enable the button
+        bookButton.disabled = false;
+        bookButton.textContent = 'Book Now';
+    });
+}
     </script>
 </body>
 </html>

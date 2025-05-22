@@ -335,7 +335,7 @@ ul li{
             </form>
         </div>
     </main>
-    <footer>
+    <!--<footer>
             <div id="made_by">Crafted by</div>
             <div class="founders">DWARAGESH C
                 <ul class="links">
@@ -364,7 +364,7 @@ ul li{
                         </a></li>
                 </ul>
             </div>
-        </footer>
+        </footer>-->
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
