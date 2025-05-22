@@ -49,49 +49,6 @@ if ($result->num_rows > 0) {
     $vendor_data = ['shop_name' => '', 'address' => ''];
 }
 
-$stmt->execute();
-$result = $stmt->get_result();
-$vendor_data = [];
-
-$username = $_SESSION['username'];
-
-$stmt->bind_param("i", $vendor_id);
-$stmt->execute();
-$result = $stmt->get_result();
-$vendor_data = [];
-
-if ($result->num_rows > 0) {
-    $vendor_data = $result->fetch_assoc();
-} else {
-    // If vendor profile doesn't exist, create an empty profile
-    if (!isset($_SESSION['id'])) {
-    die('User not logged in or session expired.');
-}
-echo "User ID from session: " . $_SESSION['id'];
-
-    $stmt = $conn->prepare("INSERT INTO vendor_profiles (user_id, shop_name, address) VALUES (?, '', '')");
-    $stmt->bind_param("i", $user_id);
-    $stmt->execute();
-    $vendor_data = ['shop_name' => '', 'address' => ''];
-}
-
-// Handle form submission to update vendor profile
-if (isset($_POST['update_profile'])) {
-    $shop_name = $_POST['shop_name'];
-    $address = $_POST['address'];
-    
-    $stmt = $conn->prepare("UPDATE vendor_profiles SET shop_name = ?, address = ? WHERE id = ?");
-    $stmt->bind_param("ssi", $shop_name, $address, $vendor_id);
-    
-    if ($stmt->execute()) {
-        $vendor_data['shop_name'] = $shop_name;
-        $vendor_data['address'] = $address;
-        $profile_update_msg = "Profile updated successfully!";
-    } else {
-        $profile_update_msg = "Error updating profile.";
-    }
-}
-
 // Handle adding new food item
 if (isset($_POST['add_food_item'])) {
     $food_item = $_POST['food_item'];
@@ -102,8 +59,7 @@ if (isset($_POST['add_food_item'])) {
     $price = (int) $_POST['price'];
 
     $stmt = $conn->prepare("INSERT INTO food_items (vendor_id, food_name, food_type, meal_count, available_until, price) VALUES (?, ?, ?, ?, ?, ?)");
-$stmt->bind_param("issisi", $vendor_id, $food_item, $food_type, $meal_count, $available_until, $price);
-
+    $stmt->bind_param("issisi", $vendor_id, $food_item, $food_type, $meal_count, $available_until, $price);
 
     if ($stmt->execute()) {
         $food_update_msg = "Food item added successfully!";
@@ -111,7 +67,6 @@ $stmt->bind_param("issisi", $vendor_id, $food_item, $food_type, $meal_count, $av
         $food_update_msg = "Error adding food item: " . $stmt->error;
     }
 }
-
 
 // Handle deleting food item
 if (isset($_GET['delete_item']) && is_numeric($_GET['delete_item'])) {
@@ -141,14 +96,20 @@ if (isset($_POST['update_count'])) {
 }
 
 // Get all food items for this vendor
-$stmt = $conn->prepare("SELECT id, dish_name, available_until FROM hotspots WHERE vendor_id = ?");
-
+$stmt = $conn->prepare("SELECT id, food_name, food_type, meal_count, available_until, price FROM food_items WHERE vendor_id = ?");
 $stmt->bind_param("i", $vendor_id);
 $stmt->execute();
 $food_items_result = $stmt->get_result();
 $food_items = [];
 
 while ($row = $food_items_result->fetch_assoc()) {
+    // Calculate time remaining
+    $now = new DateTime();
+    $expires = new DateTime($row['available_until']);
+    $interval = $now->diff($expires);
+    $hoursLeft = $expires > $now ? $interval->h + ($interval->days * 24) : 0;
+    $row['timer'] = $hoursLeft;
+    
     $food_items[] = $row;
 }
 
@@ -247,6 +208,7 @@ $conn->close();
             align-items: center;
             padding: 80px 20px 20px;
             min-height: 100vh;
+            margin-bottom: 100px;
         }
 
         .welcome-banner {
@@ -511,6 +473,53 @@ $conn->close();
                 width: 100%;
             }
         }
+        /*footer*/
+
+footer{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: rgb(46, 53, 62);
+    color: white;
+    border-radius: 15px;
+    margin: 50px;
+}
+
+#made_by{
+    display: flex;
+    flex-direction: row;
+    font-size: 40px;
+    font-family: 'Pacifico', cursive;
+
+}
+
+.founders{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    font-size: 25px;
+    font-family: 'Lato',cursive;
+}
+
+.links{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    
+
+}
+ul li{
+    list-style: none;
+    padding: 10px;}
+.links img {
+    width: 40px; 
+    height: auto; 
+}
+
+/*footer*/
     </style>
 </head>
 <body>
@@ -518,9 +527,9 @@ $conn->close();
         <div class="logo">Saapaadu</div>
         <nav>
             <a href="vendor_dashboard.php" class="nav-link">Dashboard</a>
-            <a href="#" class="nav-link">Orders</a>
-            <a href="#" class="nav-link">Profile</a>
+            <a href="vendor_profile.php" class="nav-link">Profile</a>
             <a href="logout.php" class="nav-link">Logout</a>
+            <a href="#" class="nav-link" id="contacts">Contact</a>
         </nav>
     </header>
 
@@ -532,23 +541,7 @@ $conn->close();
 
         <div class="dashboard-container">
             <div class="dashboard-section">
-                <h2 class="section-title">Vendor Profile</h2>
-                <?php if(isset($profile_update_msg)): ?>
-                <div class="message success"><?php echo $profile_update_msg; ?></div>
-                <?php endif; ?>
-                <form method="POST" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>">
-                    <div class="form-group">
-                        <label for="shop_name" class="form-label">Shop Name</label>
-                        <input type="text" id="shop_name" name="shop_name" class="form-input" value="<?php echo htmlspecialchars($vendor_data['shop_name']); ?>" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="address" class="form-label">Address</label>
-                        <textarea id="address" name="address" class="form-input" rows="3" required><?php echo htmlspecialchars($vendor_data['address']); ?></textarea>
-                    </div>
-                    <button type="submit" name="update_profile" class="submit-btn">Update Profile</button>
-                </form>
-
-                <h2 class="section-title" style="margin-top: 30px;">Add Food Item</h2>
+                <h2 class="section-title">Add Food Item</h2>
                 <?php if(isset($food_update_msg)): ?>
                 <div class="message success"><?php echo $food_update_msg; ?></div>
                 <?php endif; ?>
@@ -570,8 +563,7 @@ $conn->close();
                     </div>
                     <div class="form-group">
                         <label for="duration" class="form-label">Available for (hours)</label>
-<input type="number" id="duration" name="duration" class="form-input" min="1" value="2" required>
-
+                        <input type="number" id="duration" name="duration" class="form-input" min="1" value="2" required>
                     </div>
                     <div class="form-group">
                         <label for="price" class="form-label">Price (₹)</label>
@@ -596,7 +588,7 @@ $conn->close();
                                         <span class="hotspot-type <?php echo $item['food_type']; ?>">
                                             <?php echo $item['food_type'] === 'veg' ? 'VEG' : 'NON-VEG'; ?>
                                         </span>
-                                        <span class="timer-display">⏱️ <?php echo $item['timer']; ?> min</span>
+                                        <span class="timer-display">⏱️ <?php echo $item['timer']; ?> hours left</span>
                                     </div>
                                 </div>
                                 <div class="hotspot-controls">
@@ -620,6 +612,36 @@ $conn->close();
             </div>
         </div>
     </main>
+    <footer>
+            <div id="made_by">Crafted by</div>
+            <div class="founders">DWARAGESH C
+                <ul class="links">
+                    <li><a href="https://mail.google.com/mail/u/0/#inbox?compose=GTvVlcSDbhCLBLxqwZgxzLwDDrrTwMZdmjHKRJfxNFlBZMtrvRCFTMjvbqCQNbfvSRxKtbpSXvwxG">
+                        <img src="https://freepngimg.com/download/gmail/66428-icons-computer-google-email-gmail-free-transparent-image-hq.png">
+                        </a></li>
+                    <li><a href="https://github.com/dwarageshc7203">
+                        <img src="https://pngimg.com/uploads/github/github_PNG80.png">
+                        </a></li>
+                    <li><a href="https://www.linkedin.com/in/dwarageshc/">
+                        <img src="https://itcnet.gr/wp-content/uploads/2020/09/Linkedin-logo-on-transparent-Background-PNG--1024x1024.png">
+                        </a></li>
+                </ul>
+            </div>
+
+            <div class="founders">SRIDEV B
+                <ul class="links">
+                    <li><a href="https://mail.google.com/mail/u/0/#inbox?compose=new">
+                        <img src="https://freepngimg.com/download/gmail/66428-icons-computer-google-email-gmail-free-transparent-image-hq.png">
+                        </a></li>
+                    <li><a href="https://github.com/SRIDEV20">
+                        <img src="https://pngimg.com/uploads/github/github_PNG80.png">
+                        </a></li>
+                    <li><a href="https://www.linkedin.com/in/sri-dev-58aa4434a/">
+                        <img src="https://itcnet.gr/wp-content/uploads/2020/09/Linkedin-logo-on-transparent-Background-PNG--1024x1024.png">
+                        </a></li>
+                </ul>
+            </div>
+        </footer>
 
     <script>
         function decrementCount(itemId) {
@@ -645,6 +667,14 @@ $conn->close();
             countDisplay.textContent = currentCount;
             document.getElementById(`update_btn_${itemId}`).click();
         }
+        window.addEventListener("DOMContentLoaded", function () {
+    const contacts = document.getElementById("contacts");
+    const footer = document.querySelector("footer");
+  
+    contacts.addEventListener("click", function () {
+      footer.scrollIntoView({ behavior: "smooth" });
+    });
+  });
     </script>
 </body>
 </html>

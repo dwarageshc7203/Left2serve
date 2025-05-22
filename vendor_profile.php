@@ -55,6 +55,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $area = $_POST['area'];
     $city = $_POST['city'];
     $state = $_POST['state'];
+    $latitude = floatval($_POST['latitude']);
+$longitude = floatval($_POST['longitude']);
+
+
     
     // Handle file upload
     $shop_image = "";
@@ -87,12 +91,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     
     if ($profile_exists) {
         // Update existing profile
-        $stmt = $conn->prepare("UPDATE vendor_profiles SET full_name = ?, email = ?, food_type = ?, shop_name = ?, shop_no = ?, street = ?, area = ?, city = ?, state = ?, shop_image = ? WHERE user_id = ?");
-        $stmt->bind_param("ssssssssssi", $full_name, $email, $food_type, $shop_name, $shop_no, $street, $area, $city, $state, $shop_image, $user_id);
+        $stmt = $conn->prepare("UPDATE vendor_profiles SET full_name = ?, email = ?, food_type = ?, shop_name = ?, shop_no = ?, street = ?, area = ?, city = ?, state = ?, shop_image = ?, latitude = ?, longitude = ? WHERE user_id = ?");
+$stmt->bind_param("ssssssssssddi", $full_name, $email, $food_type, $shop_name, $shop_no, $street, $area, $city, $state, $shop_image, $latitude, $longitude, $user_id);
+
     } else {
         // Insert new profile
-        $stmt = $conn->prepare("INSERT INTO vendor_profiles (user_id, full_name, email, food_type, shop_name, shop_no, street, area, city, state, shop_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("issssssssss", $user_id, $full_name, $email, $food_type, $shop_name, $shop_no, $street, $area, $city, $state, $shop_image);
+        $stmt = $conn->prepare("INSERT INTO vendor_profiles (user_id, full_name, email, food_type, shop_name, shop_no, street, area, city, state, shop_image, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+$stmt->bind_param("issssssssssdd", $user_id, $full_name, $email, $food_type, $shop_name, $shop_no, $street, $area, $city, $state, $shop_image, $latitude, $longitude);
+
     }
     
     // Update phone number in users table
@@ -219,6 +225,7 @@ $conn->close();
     padding-top: 100px; /* Pushes content below the fixed header */
     padding-bottom: 40px;
     min-height: 100vh;
+    margin-bottom: 700px;
 }
 
 
@@ -343,6 +350,54 @@ $conn->close();
                 gap: 0;
             }
         }
+        /*footer*/
+
+footer{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: rgb(46, 53, 62);
+    color: white;
+    border-radius: 15px;
+    margin: 50px;
+    bottom: 0;
+}
+
+#made_by{
+    display: flex;
+    flex-direction: row;
+    font-size: 40px;
+    font-family: 'Pacifico', cursive;
+
+}
+
+.founders{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    font-size: 25px;
+    font-family: 'Lato',cursive;
+}
+
+.links{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    
+
+}
+ul li{
+    list-style: none;
+    padding: 10px;}
+.links img {
+    width: 40px; 
+    height: auto; 
+}
+
+/*footer*/
     </style>
 </head>
 <body>
@@ -352,6 +407,7 @@ $conn->close();
             <a href="index.php" class="nav-link">Home</a>
             <a href="vendor_dashboard.php" class="nav-link">Dashboard</a>
             <a href="logout.php" class="nav-link">Logout</a>
+            <a href="#" class="nav-link" id="contacts">Contact</a>
         </nav>
     </header>
 
@@ -426,6 +482,18 @@ $conn->close();
                     <label for="state" class="form-label">State</label>
                     <input type="text" id="state" name="state" class="form-input" value="<?php echo $profile_exists ? htmlspecialchars($profile_data['state']) : ''; ?>" required>
                 </div>
+
+                <div class="form-row">
+    <div class="form-group">
+        <label for="latitude" class="form-label">Latitude:</label>
+        <input type="text" id="latitude" name="latitude" class="form-input" value="<?php echo $profile_exists ? htmlspecialchars($profile_data['latitude']) : ''; ?>" required>
+    </div>
+    <div class="form-group">
+        <label for="longitude" class="form-label">Longitude:</label>
+        <input type="text" id="longitude" name="longitude" class="form-input" value="<?php echo $profile_exists ? htmlspecialchars($profile_data['longitude']) : ''; ?>" required>
+    </div>
+</div>
+
                 
                 <div class="form-group">
                     <label for="shop_image" class="form-label">Shop Image</label>
@@ -443,6 +511,36 @@ $conn->close();
             <?php endif; ?>
         </div>
     </main>
+    <footer>
+            <div id="made_by">Crafted by</div>
+            <div class="founders">DWARAGESH C
+                <ul class="links">
+                    <li><a href="https://mail.google.com/mail/u/0/#inbox?compose=GTvVlcSDbhCLBLxqwZgxzLwDDrrTwMZdmjHKRJfxNFlBZMtrvRCFTMjvbqCQNbfvSRxKtbpSXvwxG">
+                        <img src="https://freepngimg.com/download/gmail/66428-icons-computer-google-email-gmail-free-transparent-image-hq.png">
+                        </a></li>
+                    <li><a href="https://github.com/dwarageshc7203">
+                        <img src="https://pngimg.com/uploads/github/github_PNG80.png">
+                        </a></li>
+                    <li><a href="https://www.linkedin.com/in/dwarageshc/">
+                        <img src="https://itcnet.gr/wp-content/uploads/2020/09/Linkedin-logo-on-transparent-Background-PNG--1024x1024.png">
+                        </a></li>
+                </ul>
+            </div>
+
+            <div class="founders">SRIDEV B
+                <ul class="links">
+                    <li><a href="https://mail.google.com/mail/u/0/#inbox?compose=new">
+                        <img src="https://freepngimg.com/download/gmail/66428-icons-computer-google-email-gmail-free-transparent-image-hq.png">
+                        </a></li>
+                    <li><a href="https://github.com/SRIDEV20">
+                        <img src="https://pngimg.com/uploads/github/github_PNG80.png">
+                        </a></li>
+                    <li><a href="https://www.linkedin.com/in/sri-dev-58aa4434a/">
+                        <img src="https://itcnet.gr/wp-content/uploads/2020/09/Linkedin-logo-on-transparent-Background-PNG--1024x1024.png">
+                        </a></li>
+                </ul>
+            </div>
+        </footer>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -455,6 +553,14 @@ $conn->close();
                 submitBtn.style.backgroundColor = '#0097a7';
             });
         });
+        window.addEventListener("DOMContentLoaded", function () {
+    const contacts = document.getElementById("contacts");
+    const footer = document.querySelector("footer");
+  
+    contacts.addEventListener("click", function () {
+      footer.scrollIntoView({ behavior: "smooth" });
+    });
+  });
     </script>
 </body>
 </html>

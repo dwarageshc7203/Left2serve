@@ -21,29 +21,178 @@ if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 
-// Default food preference
-$food_preference = isset($_GET['preference']) ? $_GET['preference'] : 'Veg';
+// DEBUGGING: Add a flag to check if we're getting any rows at all before location filtering
+$debug_mode = true; // Set to true to enable debugging
+$debug_message = "";
+$debug_counts = [
+    "total_hotspots" => 0,
+    "after_preference_filter" => 0,
+    "after_location_filter" => 0,
+    "after_expiry_filter" => 0
+];
 
-// Get all hotspots based on preference
-$hotspots_query = "SELECT h.*, v.vendor_name FROM hotspots h JOIN vendor_profiles v ON h.vendor_id = v.id WHERE h.food_type = ?";
-$stmt = $conn->prepare($hotspots_query);
-$stmt->bind_param("s", $food_preference);
+// Get customer location information (if available)
+$customer_id = $_SESSION['user_id'] ?? 0;
+$customer_location = ['area' => '', 'city' => ''];
 
-$stmt->execute();
-$result = $stmt->get_result();
-
-$hotspots = [];
-while ($row = $result->fetch_assoc()) {
-    $now = new DateTime();
-$expires = new DateTime($row['available_until']);
-$interval = $now->diff($expires);
-$hoursLeft = $expires > $now ? $interval->h + ($interval->days * 24) : 0;
-$row['hours_left'] = $hoursLeft;
-
-    $hotspots[] = $row;
+if ($customer_id > 0) {
+    $customer_query = "SELECT area, city FROM customer_profiles WHERE user_id = ?";
+    $stmt = $conn->prepare($customer_query);
+    $stmt->bind_param("i", $customer_id);
+    $stmt->execute();
+    $customer_result = $stmt->get_result();
+    
+    if ($customer_result->num_rows > 0) {
+        $customer_location = $customer_result->fetch_assoc();
+    } else {
+        $debug_message .= "Warning: Customer profile not found for user_id: $customer_id<br>";
+    }
+    $stmt->close();
+} else {
+    $debug_message .= "Warning: No valid user_id found in session<br>";
 }
-$stmt->close();
-$conn->close();
+
+// Default food preference based on customer's dietary preference (if available)
+$default_preference = 'Veg'; // Default if no preference is found
+
+if ($customer_id > 0) {
+    $customer_pref_query = "SELECT dietary_preference FROM customer_profiles WHERE user_id = ?";
+    $stmt = $conn->prepare($customer_pref_query);
+    $stmt->bind_param("i", $customer_id);
+    $stmt->execute();
+    $pref_result = $stmt->get_result();
+    
+    if ($pref_result->num_rows > 0) {
+        $customer_pref = $pref_result->fetch_assoc();
+        if (!empty($customer_pref['dietary_preference'])) {
+            $default_preference = $customer_pref['dietary_preference'];
+        }
+    }
+    $stmt->close();
+}
+
+// Get food preference from URL parameter or use default
+$food_preference = isset($_GET['preference']) ? $_GET['preference'] : $default_preference;
+
+// EMERGENCY DEBUG MODE - Completely bypass all filters
+$debug_mode = true;
+$emergency_debug = true;
+$debug_message = "";
+$debug_counts = [
+    "total_hotspots" => 0,
+    "after_preference_filter" => 0,
+    "after_location_filter" => 0,
+    "after_expiry_filter" => 0
+];
+
+// Direct raw data dump from the database
+$raw_data = [];
+$raw_vendors = [];
+$raw_food_items = [];
+$raw_customer = [];
+
+// Get raw customer data
+if ($customer_id > 0) {
+    $raw_customer_query = "SELECT * FROM customer_profiles WHERE user_id = ?";
+    $stmt = $conn->prepare($raw_customer_query);
+    $stmt->bind_param("i", $customer_id);
+    $stmt->execute();
+    $raw_customer_result = $stmt->get_result();
+    if ($raw_customer_result->num_rows > 0) {
+        $raw_customer = $raw_customer_result->fetch_assoc();
+    }
+    $stmt->close();
+}
+
+// Get raw vendor data
+$vendor_query = "SELECT * FROM vendor_profiles";
+$vendor_result = $conn->query($vendor_query);
+while ($row = $vendor_result->fetch_assoc()) {
+    $raw_vendors[] = $row;
+}
+
+// Get raw food_items data
+$food_query = "SELECT * FROM food_items";
+$food_result = $conn->query($food_query);
+while ($row = $food_result->fetch_assoc()) {
+    $raw_food_items[] = $row;
+}
+
+// Generate raw data structure
+foreach ($raw_vendors as $vendor) {
+    foreach ($raw_food_items as $food) {
+        if ($food['vendor_id'] == $vendor['id']) {
+            $raw_data[] = [
+                'vendor' => $vendor,
+                'food' => $food
+            ];
+        }
+    }
+}
+
+// Get actual hotspots with simplified logic
+if ($emergency_debug) {
+    // Use a very simple query that should return all hotspots
+    $preference = $_SESSION['dietary_preference'] ?? 'Veg'; // fallback to Veg
+    $simple_query = "SELECT vp.*, fi.* 
+                    FROM vendor_profiles vp
+                    JOIN food_items fi ON vp.id = fi.vendor_id
+                    WHERE fi.food_type = ?";
+    $stmt = $conn->prepare($simple_query);
+    $stmt->bind_param("s", $preference);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    $hotspots = [];
+    while ($row = $result->fetch_assoc()) {
+        // Create a nicely formatted hotspot object
+        $hotspot = [
+            'id' => $row['id'],
+            'user_id' => $row['user_id'],
+            'vendor_name' => $row['full_name'],
+            'shop_name' => $row['shop_name'],
+            'food_type' => $row['food_type'],
+            'address' => $row['shop_no'] . ', ' . $row['street'] . ', ' . $row['area'] . ', ' . $row['city'],
+            'area' => $row['area'],
+            'city' => $row['city'],
+            'latitude' => $row['latitude'],
+            'longitude' => $row['longitude'],
+            'food_id' => $row['id'],
+            'food_item' => $row['food_name'],
+            'meal_count' => $row['meal_count'],
+            'price' => $row['price'],
+            'available_until' => $row['available_until'],
+            'hours_left' => 1 // Default value
+        ];
+        
+        // Try to calculate hours left
+        try {
+            $now = new DateTime();
+            $expires = new DateTime($row['available_until']);
+            if ($expires > $now) {
+                $interval = $now->diff($expires);
+                $hotspot['hours_left'] = $interval->h + ($interval->days * 24);
+            }
+        } catch (Exception $e) {
+            // Ignore date parsing errors
+        }
+        
+        $hotspots[] = $hotspot;
+    }
+} else {
+    // Original logic from before
+    // (This code won't execute with emergency_debug = true)
+}
+
+// Count for debug display
+$debug_counts["total_hotspots"] = count($raw_food_items);
+$debug_counts["after_preference_filter"] = count($raw_data);
+$debug_counts["after_location_filter"] = count($raw_data);
+$debug_counts["after_expiry_filter"] = count($hotspots);
+if (isset($stmt) && $stmt instanceof mysqli_stmt) {
+    $stmt->close();
+    $conn->close();
+}
 ?>
 
 <!DOCTYPE html>
@@ -66,7 +215,6 @@ $conn->close();
         html, body {
             height: 100%;
             overflow-x: hidden;
-            scroll-behavior: smooth;
         }
 
         body {
@@ -75,6 +223,7 @@ $conn->close();
             color: white;
             display: flex;
             flex-direction: column;
+            margin-bottom: 1300px;
         }
 
         /* Header styling */
@@ -131,14 +280,7 @@ $conn->close();
             width: 100%;
         }
 
-        /* Main content */
-        main {
-            flex: 1;
-            display: flex;
-            padding-top: 60px;
-            min-height: calc(100vh - 60px);
-        }
-
+        /* Filter bar */
         .filter-bar {
             position: fixed;
             top: 60px;
@@ -150,7 +292,6 @@ $conn->close();
             align-items: center;
             justify-content: center;
             z-index: 900;
-            border-bottom: 1px solid #444;
         }
 
         .preference-toggle {
@@ -177,12 +318,17 @@ $conn->close();
             transform: scale(1.05);
         }
 
-        /* Map container */
-        .map-container {
-            flex: 6;
-            background-color: #f0e68c;
+        /* Main content layout */
+        .dashboard-container {
+            display: flex;
             height: calc(100vh - 100px);
-            margin-top: 40px;
+            margin-top: 100px;
+        }
+
+        /* Map styling */
+        .map-container {
+            flex: 7;
+            background-color: #f0e68c;
         }
 
         #map {
@@ -190,156 +336,200 @@ $conn->close();
             width: 100%;
         }
 
-        /* Hotspots list */
-        .hotspots-container {
-            flex: 4;
-            padding: 20px;
-            margin-top: 40px;
-            background-color: #b2c7e8;
-            max-height: calc(100vh - 100px);
+        /* Sidebar styling */
+        .sidebar {
+            flex: 3;
+            height: 100%;
             overflow-y: auto;
+            padding: 10px;
+            background-color: #b2c7e8;
         }
 
-        .hotspot-card {
-            background-color: #d1e0f5;
-            border-radius: 10px;
-            margin-bottom: 15px;
+        .hotspot-btn {
+            display: block;
+            width: 100%;
+            margin: 10px 0;
             padding: 15px;
-            transition: all 0.3s ease;
+            background-color: #d1e0f5;
+            border: none;
+            border-radius: 10px;
+            text-align: left;
             cursor: pointer;
+            transition: all 0.3s ease;
             position: relative;
         }
 
-        .hotspot-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        .hotspot-btn:hover {
+            background-color: #a2c4e8;
+            transform: translateY(-2px);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
         }
 
-        .hotspot-title {
+        .hotspot-name {
+            font-weight: bold;
+            font-size: 1.2rem;
             color: #1a1a1a;
-            font-size: 1.5rem;
             margin-bottom: 5px;
         }
 
-        .hotspot-type {
+        .hotspot-type-time {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #0066cc;
+        }
+
+        .hotspot-time {
             background-color: #7c5295;
             color: white;
-            padding: 3px 10px;
-            border-radius: 15px;
-            display: inline-block;
-            margin-bottom: 10px;
-        }
-
-        .hotspot-info {
-            color: #0066cc;
-            margin-bottom: 5px;
-            font-size: 1.1rem;
-        }
-
-        .hotspot-timer {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            background-color: #00bcd4;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-weight: bold;
-        }
-
-        .location-icon {
-            width: 24px;
-            height: 24px;
-            vertical-align: middle;
-            margin-right: 5px;
-        }
-
-        /* Modal styling */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1001;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0, 0, 0, 0.7);
-            animation: fadeIn 0.3s ease;
-        }
-
-        .modal-content {
-            background-color: #f2d32c;
-            margin: 10% auto;
-            padding: 30px;
+            padding: 3px 8px;
             border-radius: 10px;
-            width: 80%;
-            max-width: 600px;
-            animation: slideIn 0.4s ease;
+            font-size: 0.9rem;
         }
 
-        .modal-title {
-            color: #1a1a1a;
-            font-size: 2rem;
-            margin-bottom: 20px;
+        .hotspot-address {
+            color: #333;
+            font-size: 0.9rem;
+            margin-top: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .hotspot-food {
+            color: #555;
+            font-style: italic;
+            font-size: 0.9rem;
+            margin-top: 3px;
+        }
+
+        /* No hotspots message */
+        .no-hotspots {
             text-align: center;
-        }
-
-        .modal-body {
+            padding: 20px;
             color: #333;
             font-size: 1.1rem;
         }
 
-        .modal-info {
+        /* Modal/Popup styling */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 1001;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: #f2d32c;
+            width: 90%;
+            max-width: 500px;
+            padding: 25px;
+            border-radius: 10px;
+            position: relative;
+            color: #1a1a1a;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #0066cc;
+        }
+
+        .modal-title {
+            font-size: 1.8rem;
             margin-bottom: 15px;
+            color: #7c5295;
+        }
+
+        .modal-info {
+            margin-bottom: 10px;
             display: flex;
             justify-content: space-between;
         }
 
-        .modal-info-label {
+        .modal-label {
             font-weight: bold;
             color: #0066cc;
         }
 
-        .modal-info-value {
-            text-align: right;
-        }
-
-        .modal-close {
-            color: #1a1a1a;
-            font-size: 2rem;
-            position: absolute;
-            top: 15px;
-            right: 25px;
-            cursor: pointer;
-        }
-
-        .modal-close:hover {
-            color: #0066cc;
-        }
-
         @keyframes fadeIn {
-            from {opacity: 0}
-            to {opacity: 1}
-        }
-
-        @keyframes slideIn {
-            from {transform: translateY(-50px); opacity: 0;}
-            to {transform: translateY(0); opacity: 1;}
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         @media (max-width: 768px) {
-            main {
+            .dashboard-container {
                 flex-direction: column;
             }
 
-            .map-container, .hotspots-container {
+            .map-container {
                 flex: none;
-                width: 100%;
-                height: 50vh;
-                max-height: 50vh;
+                height: 60%;
+            }
+
+            .sidebar {
+                flex: none;
+                height: 40%;
             }
         }
+        /*footer*/
+
+footer{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: rgb(46, 53, 62);
+    color: white;
+    border-radius: 15px;
+    margin: 50px;
+}
+
+#made_by{
+    display: flex;
+    flex-direction: row;
+    font-size: 40px;
+    font-family: 'Pacifico', cursive;
+
+}
+
+.founders{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    font-size: 25px;
+    font-family: 'Lato',cursive;
+}
+
+.links{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    
+
+}
+ul li{
+    list-style: none;
+    padding: 10px;}
+
+.links img {
+    width: 40px; 
+    height: auto; 
+}
+
+/*footer*/
     </style>
 </head>
 <body>
@@ -349,6 +539,8 @@ $conn->close();
             <a href="customer_dashboard.php" class="nav-link">Dashboard</a>
             <a href="customer_profile.php" class="nav-link">Profile</a>
             <a href="logout.php" class="nav-link">Logout</a>
+            <a href="#" class="nav-link" id="contacts">Contact</a>
+            
         </nav>
     </header>
 
@@ -359,174 +551,267 @@ $conn->close();
         </div>
     </div>
 
-    <main>
+    <div class="dashboard-container">
         <div class="map-container">
             <div id="map"></div>
         </div>
-        <div class="hotspots-container">
-            <?php foreach ($hotspots as $hotspot): ?>
-            <div class="hotspot-card" data-id="<?php echo $hotspot['id']; ?>">
-                <h2 class="hotspot-title"><?php echo $hotspot['shop_name']; ?></h2>
-                <div class="hotspot-type"><?php echo $hotspot['food_type']; ?></div>
-                <p class="hotspot-info">
-                    <svg class="location-icon" fill="#0066cc" viewBox="0 0 24 24">
-                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-                    </svg>
-                    <?php echo $hotspot['address']; ?>
-                </p>
-                <p class="hotspot-info">Food: <?php echo $hotspot['food_item']; ?></p>
-                <div class="hotspot-timer">
-    <?php
-    $now = new DateTime();
-    $expires = new DateTime($hotspot['available_until']);
-    $interval = $now->diff($expires);
-    $hoursLeft = $expires > $now ? $interval->h + ($interval->days * 24) : 0;
-    echo $hoursLeft . " Hour(s) left";
-    ?>
-</div>
-
-            </div>
-            <?php endforeach; ?>
-        </div>
-    </main>
-
-    <!-- Modal for hotspot details -->
-    <div id="hotspotModal" class="modal">
-        <div class="modal-content">
-            <span class="modal-close">&times;</span>
-            <h2 class="modal-title" id="modalTitle"></h2>
-            <div class="modal-body">
-                <div class="modal-info">
-                    <span class="modal-info-label">Food Type:</span>
-                    <span class="modal-info-value" id="modalFoodType"></span>
+        <div class="sidebar">
+            <?php if($debug_mode): ?><!--
+            <div class="debug-info" style="background-color: #ffe6e6; color: #800000; padding: 10px; margin-bottom: 10px; border-radius: 5px; overflow: auto; max-height: 400px;">
+                <h3>Debug Information</h3>
+                <p>Total hotspots in database: <?php echo $debug_counts["total_hotspots"]; ?></p>
+                <p>After food preference filter: <?php echo $debug_counts["after_preference_filter"]; ?></p>
+                <p>After location filter: <?php echo $debug_counts["after_location_filter"]; ?></p>
+                <p>After expiry filter: <?php echo $debug_counts["after_expiry_filter"]; ?></p>
+                <p>Your location: Area - <?php echo $customer_location['area'] ?? 'Not set'; ?>, City - <?php echo $customer_location['city'] ?? 'Not set'; ?></p>
+                <p>Your food preference: <?php echo $food_preference; ?></p>
+                
+                <?php if($emergency_debug): ?>
+                <hr>
+                <h4>Customer Data:</h4>
+                <pre><?php print_r($raw_customer); ?></pre>
+                
+                <hr>
+                <h4>Vendors Data:</h4>
+                <pre><?php foreach($raw_vendors as $index => $vendor) {
+                    echo "Vendor " . ($index + 1) . ":\n";
+                    print_r($vendor);
+                    echo "\n";
+                } ?></pre>
+                
+                <hr>
+                <h4>Food Items Data:</h4>
+                <pre><?php foreach($raw_food_items as $index => $item) {
+                    echo "Food Item " . ($index + 1) . ":\n";
+                    print_r($item);
+                    echo "\n";
+                } ?></pre>
+                <?php endif; ?>
+                
+                <?php echo $debug_message; ?>
+            </div>-->
+            <?php endif; ?>
+            
+            <?php if(count($hotspots) > 0): ?>
+                <?php foreach($hotspots as $hotspot): ?>
+                    <button class="hotspot-btn" onclick="showHotspotDetails(<?php echo htmlspecialchars(json_encode($hotspot)); ?>)">
+                        <div class="hotspot-name"><?php echo htmlspecialchars($hotspot['shop_name']); ?></div>
+                        <div class="hotspot-type-time">
+                            <span><?php echo htmlspecialchars($hotspot['food_type']); ?></span>
+                            <span class="hotspot-time"><?php echo $hotspot['hours_left']; ?> Hour<?php echo $hotspot['hours_left'] != 1 ? 's' : ''; ?> left</span>
+                        </div>
+                        <div class="hotspot-food"><?php echo htmlspecialchars($hotspot['food_item']); ?></div>
+                        <div class="hotspot-address"><?php echo htmlspecialchars($hotspot['address']); ?></div>
+                    </button>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <div class="no-hotspots">
+                    <p>No available hotspots found in your area.</p>
+                    <p>Try changing your food preference or check back later!</p>
                 </div>
-                <div class="modal-info">
-                    <span class="modal-info-label">Food Item:</span>
-                    <span class="modal-info-value" id="modalFoodItem"></span>
-                </div>
-                <div class="modal-info">
-                    <span class="modal-info-label">Address:</span>
-                    <span class="modal-info-value" id="modalAddress"></span>
-                </div>
-                <div class="modal-info">
-                    <span class="modal-info-label">Meal Count:</span>
-                    <span class="modal-info-value" id="modalMealCount"></span>
-                </div>
-                <div class="modal-info">
-                    <span class="modal-info-label">Time Left:</span>
-                    <span class="modal-info-value" id="modalTimer"></span>
-                </div>
-                <div class="modal-info">
-                    <span class="modal-info-label">Price:</span>
-                    <span class="modal-info-value" id="modalPrice"></span>
-                </div>
-            </div>
+            <?php endif; ?>
         </div>
     </div>
 
-    <!-- Leaflet JS for map -->
+    <!-- Modal for detailed hotspot information -->
+    <div class="modal-overlay" id="hotspotModal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal()">&times;</span>
+            <h2 class="modal-title" id="modalTitle"></h2>
+            <div class="modal-info">
+                <span class="modal-label">Food Type:</span>
+                <span id="modalFoodType"></span>
+            </div>
+            <div class="modal-info">
+                <span class="modal-label">Food Item:</span>
+                <span id="modalFoodItem"></span>
+            </div>
+            <div class="modal-info">
+                <span class="modal-label">Address:</span>
+                <span id="modalAddress"></span>
+            </div>
+            <div class="modal-info">
+                <span class="modal-label">Available Meals:</span>
+                <span id="modalMealCount"></span>
+            </div>
+            <div class="modal-info">
+                <span class="modal-label">Time Left:</span>
+                <span id="modalTimer"></span>
+            </div>
+            <div class="modal-info">
+                <span class="modal-label">Price:</span>
+                <span id="modalPrice"></span>
+            </div>
+        </div>
+    </div>
+    <footer>
+            <div id="made_by">Crafted by</div>
+            <div class="founders">DWARAGESH C
+                <ul class="links">
+                    <li><a href="https://mail.google.com/mail/u/0/#inbox?compose=GTvVlcSDbhCLBLxqwZgxzLwDDrrTwMZdmjHKRJfxNFlBZMtrvRCFTMjvbqCQNbfvSRxKtbpSXvwxG">
+                        <img src="https://freepngimg.com/download/gmail/66428-icons-computer-google-email-gmail-free-transparent-image-hq.png">
+                        </a></li>
+                    <li><a href="https://github.com/dwarageshc7203">
+                        <img src="https://pngimg.com/uploads/github/github_PNG80.png">
+                        </a></li>
+                    <li><a href="https://www.linkedin.com/in/dwarageshc/">
+                        <img src="https://itcnet.gr/wp-content/uploads/2020/09/Linkedin-logo-on-transparent-Background-PNG--1024x1024.png">
+                        </a></li>
+                </ul>
+            </div>
+
+            <div class="founders">SRIDEV B
+                <ul class="links">
+                    <li><a href="https://mail.google.com/mail/u/0/#inbox?compose=new">
+                        <img src="https://freepngimg.com/download/gmail/66428-icons-computer-google-email-gmail-free-transparent-image-hq.png">
+                        </a></li>
+                    <li><a href="https://github.com/SRIDEV20">
+                        <img src="https://pngimg.com/uploads/github/github_PNG80.png">
+                        </a></li>
+                    <li><a href="https://www.linkedin.com/in/sri-dev-58aa4434a/">
+                        <img src="https://itcnet.gr/wp-content/uploads/2020/09/Linkedin-logo-on-transparent-Background-PNG--1024x1024.png">
+                        </a></li>
+                </ul>
+            </div>
+        </footer>
+
+    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initialize map
-            var map = L.map('map').setView([13.0827, 80.2707], 13); // Chennai coordinates
+        // Initialize map with default view (center of India)
+        const map = L.map('map').setView([20.5937, 78.9629], 5);
 
-            // Add OpenStreetMap tiles
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '© OpenStreetMap contributors'
-            }).addTo(map);
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
 
-            // Add markers for each hotspot
-            const hotspots = <?php echo json_encode($hotspots); ?>;
-            const hotspotMarkers = {};
+        // Get hotspots data from PHP
+        const hotspots = <?php echo json_encode($hotspots); ?>;
+        const markers = {};
 
+        // Add markers to map
+        if (hotspots.length > 0) {
+            // Calculate bounds to fit all markers
+            const bounds = [];
+            
             hotspots.forEach(hotspot => {
-                // Assuming coordinates are stored as latitude and longitude in the database
-                // If not, you would need to geocode the addresses
-                const coords = [parseFloat(hotspot.latitude) || 13.0827, parseFloat(hotspot.longitude) || 80.2707];
+                console.log("Processing hotspot:", hotspot);
                 
-                // Create custom icon based on food type
-                const iconUrl = hotspot.food_type === 'Veg' ? 
-                    'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png' : 
-                    'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png';
-                
-                const customIcon = L.icon({
-                    iconUrl: iconUrl,
-                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-                    iconSize: [25, 41],
-                    iconAnchor: [12, 41],
-                    popupAnchor: [1, -34],
-                    shadowSize: [41, 41]
-                });
-
-                const marker = L.marker(coords, {icon: customIcon}).addTo(map);
-                marker.bindPopup(`<b>${hotspot.shop_name}</b><br>${hotspot.food_item}<br>${hotspot.timer} Hour left`);
-                
-                // Store marker reference
-                hotspotMarkers[hotspot.id] = marker;
-                
-                // Add click event
-                marker.on('click', function() {
-                    showHotspotDetails(hotspot);
-                });
-            });
-
-            // Toggle preference button
-            document.getElementById('togglePreference').addEventListener('click', function() {
-                const currentPreference = '<?php echo $food_preference; ?>';
-                const newPreference = currentPreference === 'Veg' ? 'Non-Veg' : 'Veg';
-                window.location.href = `customer_dashboard.php?preference=${newPreference}`;
-            });
-
-            // Hotspot card click event
-            const hotspotCards = document.querySelectorAll('.hotspot-card');
-            hotspotCards.forEach(card => {
-                card.addEventListener('click', function() {
-                    const hotspotId = this.getAttribute('data-id');
-                    const hotspot = hotspots.find(h => h.id == hotspotId);
+                // Only proceed if coordinates are valid
+                if (hotspot.latitude && hotspot.longitude) {
+                    const lat = parseFloat(hotspot.latitude);
+                    const lng = parseFloat(hotspot.longitude);
                     
-                    if (hotspot) {
-                        // Center map on this hotspot
-                        const marker = hotspotMarkers[hotspotId];
-                        if (marker) {
-                            map.setView(marker.getLatLng(), 16);
-                            marker.openPopup();
-                        }
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                        const position = [lat, lng];
+                        bounds.push(position);
                         
-                        // Show details modal
-                        showHotspotDetails(hotspot);
+                        // Create icon based on food type
+                        const iconUrl = hotspot.food_type === 'Veg' ? 
+                            'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png' : 
+                            'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png';
+                        
+                        const customIcon = L.icon({
+                            iconUrl: iconUrl,
+                            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                            iconSize: [25, 41],
+                            iconAnchor: [12, 41],
+                            popupAnchor: [1, -34],
+                            shadowSize: [41, 41]
+                        });
+                        
+                        // Create a unique ID for the marker
+                        const markerId = hotspot.food_id || hotspot.id;
+                        
+                        // Create marker with unique ID 
+                        const marker = L.marker(position, {icon: customIcon}).addTo(map);
+                        
+                        // Add popup to marker
+                        marker.bindPopup(`
+                            <b>${hotspot.shop_name || "Unknown Shop"}</b><br>
+                            ${hotspot.food_item || "Unknown Food"}<br>
+                            ${hotspot.hours_left} Hour${hotspot.hours_left != 1 ? 's' : ''} left
+                        `);
+                        
+                        // Store marker
+                        markers[markerId] = marker;
+                        
+                        // Add click event to marker
+                        marker.on('click', () => showHotspotDetails(hotspot));
+                    } else {
+                        console.log("Invalid coordinates:", hotspot);
                     }
-                });
-            });
-
-            // Modal functionality
-            const modal = document.getElementById('hotspotModal');
-            const closeBtn = document.querySelector('.modal-close');
-            
-            closeBtn.addEventListener('click', function() {
-                modal.style.display = 'none';
-            });
-            
-            window.addEventListener('click', function(event) {
-                if (event.target === modal) {
-                    modal.style.display = 'none';
+                } else {
+                    console.log("Missing coordinates:", hotspot);
                 }
             });
+            
+            // If we have valid bounds, fit the map to them
+            if (bounds.length > 0) {
+                map.fitBounds(bounds);
+            } else {
+                // Default to Chennai if no valid coordinates
+                map.setView([13.0827, 80.2707], 12);
+            }
+        } else {
+            // Default to Chennai if no hotspots
+            map.setView([13.0827, 80.2707], 12);
+        }
 
-            // Function to show hotspot details in modal
-            function showHotspotDetails(hotspot) {
-                document.getElementById('modalTitle').textContent = hotspot.shop_name;
-                document.getElementById('modalFoodType').textContent = hotspot.food_type;
-                document.getElementById('modalFoodItem').textContent = hotspot.food_item;
-                document.getElementById('modalAddress').textContent = hotspot.address;
-                document.getElementById('modalMealCount').textContent = hotspot.meal_count + ' meals available';
-                document.getElementById('modalTimer').textContent = hotspot.timer + ' Hour left';
-                document.getElementById('modalPrice').textContent = '₹' + hotspot.price + ' per meal';
-                
-                modal.style.display = 'block';
+        // Toggle preference button
+        document.getElementById('togglePreference').addEventListener('click', function() {
+            const currentPreference = '<?php echo $food_preference; ?>';
+            const newPreference = currentPreference === 'Veg' ? 'Non-Veg' : 'Veg';
+            window.location.href = `customer_dashboard.php?preference=${newPreference}`;
+        });
+
+        // Show hotspot details in modal
+        function showHotspotDetails(hotspot) {
+            // If hotspot is passed as a string (from onclick attribute), parse it
+            if (typeof hotspot === 'string') {
+                hotspot = JSON.parse(hotspot);
+            }
+            
+            // Center map on selected hotspot and open its popup
+            if (markers[hotspot.food_id]) {
+                map.setView(markers[hotspot.food_id].getLatLng(), 16);
+                markers[hotspot.food_id].openPopup();
+            }
+            
+            // Populate modal with hotspot details
+            document.getElementById('modalTitle').textContent = hotspot.shop_name;
+            document.getElementById('modalFoodType').textContent = hotspot.food_type;
+            document.getElementById('modalFoodItem').textContent = hotspot.food_item || 'Not specified';
+            document.getElementById('modalAddress').textContent = hotspot.address;
+            document.getElementById('modalMealCount').textContent = hotspot.meal_count || 'Unknown';
+            document.getElementById('modalTimer').textContent = hotspot.hours_left + ' Hour' + (hotspot.hours_left != 1 ? 's' : '') + ' left';
+            document.getElementById('modalPrice').textContent = hotspot.price ? '₹' + hotspot.price : 'Not specified';
+            
+            // Show modal
+            document.getElementById('hotspotModal').style.display = 'flex';
+        }
+
+        // Close modal function
+        function closeModal() {
+            document.getElementById('hotspotModal').style.display = 'none';
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('hotspotModal').addEventListener('click', function(event) {
+            if (event.target === this) {
+                closeModal();
             }
         });
+        window.addEventListener("DOMContentLoaded", function () {
+    const contacts = document.getElementById("contacts");
+    const footer = document.querySelector("footer");
+  
+    contacts.addEventListener("click", function () {
+      footer.scrollIntoView({ behavior: "smooth" });
+    });
+  });
     </script>
 </body>
 </html>

@@ -248,6 +248,53 @@ $conn->close();
                 width: 100%;
             }
         }
+        /*footer*/
+
+footer{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: rgb(46, 53, 62);
+    color: white;
+    border-radius: 15px;
+    margin: 50px;
+}
+
+#made_by{
+    display: flex;
+    flex-direction: row;
+    font-size: 40px;
+    font-family: 'Pacifico', cursive;
+
+}
+
+.founders{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    font-size: 25px;
+    font-family: 'Lato',cursive;
+}
+
+.links{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    
+
+}
+ul li{
+    list-style: none;
+    padding: 10px;}
+.links img {
+    width: 40px; 
+    height: auto; 
+}
+
+/*footer*/
     </style>
 </head>
 <body>
@@ -257,7 +304,7 @@ $conn->close();
             <a href="homepage.html" class="nav-link">Home</a>
             <a href="login.php" class="nav-link">Login</a>
             <a href="signup.php" class="nav-link">Sign Up</a>
-            <a href="#" class="nav-link">Contact</a>
+            <a href="#" class="nav-link" id="contacts">Contact</a>
         </nav>
     </header>
 
@@ -288,6 +335,36 @@ $conn->close();
             </form>
         </div>
     </main>
+    <footer>
+            <div id="made_by">Crafted by</div>
+            <div class="founders">DWARAGESH C
+                <ul class="links">
+                    <li><a href="https://mail.google.com/mail/u/0/#inbox?compose=GTvVlcSDbhCLBLxqwZgxzLwDDrrTwMZdmjHKRJfxNFlBZMtrvRCFTMjvbqCQNbfvSRxKtbpSXvwxG">
+                        <img src="https://freepngimg.com/download/gmail/66428-icons-computer-google-email-gmail-free-transparent-image-hq.png">
+                        </a></li>
+                    <li><a href="https://github.com/dwarageshc7203">
+                        <img src="https://pngimg.com/uploads/github/github_PNG80.png">
+                        </a></li>
+                    <li><a href="https://www.linkedin.com/in/dwarageshc/">
+                        <img src="https://itcnet.gr/wp-content/uploads/2020/09/Linkedin-logo-on-transparent-Background-PNG--1024x1024.png">
+                        </a></li>
+                </ul>
+            </div>
+
+            <div class="founders">SRIDEV B
+                <ul class="links">
+                    <li><a href="https://mail.google.com/mail/u/0/#inbox?compose=new">
+                        <img src="https://freepngimg.com/download/gmail/66428-icons-computer-google-email-gmail-free-transparent-image-hq.png">
+                        </a></li>
+                    <li><a href="https://github.com/SRIDEV20">
+                        <img src="https://pngimg.com/uploads/github/github_PNG80.png">
+                        </a></li>
+                    <li><a href="https://www.linkedin.com/in/sri-dev-58aa4434a/">
+                        <img src="https://itcnet.gr/wp-content/uploads/2020/09/Linkedin-logo-on-transparent-Background-PNG--1024x1024.png">
+                        </a></li>
+                </ul>
+            </div>
+        </footer>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -300,6 +377,14 @@ $conn->close();
                 submitBtn.style.backgroundColor = '#0097a7';
             });
         });
+        window.addEventListener("DOMContentLoaded", function () {
+    const contacts = document.getElementById("contacts");
+    const footer = document.querySelector("footer");
+  
+    contacts.addEventListener("click", function () {
+      footer.scrollIntoView({ behavior: "smooth" });
+    });
+  });
     </script>
 </body>
 </html>
