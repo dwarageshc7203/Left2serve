@@ -402,7 +402,7 @@ ul li{
 </head>
 <body>
     <header>
-        <div class="logo">Saapaadu</div>
+        <div class="logo">Left2serve</div>
         <nav>
             <a href="index.php" class="nav-link">Home</a>
             <a href="vendor_dashboard.php" class="nav-link">Dashboard</a>

@@ -536,7 +536,7 @@ ul li{
 </head>
 <body>
     <header>
-        <div class="logo">Saapaadu</div>
+        <div class="logo">Left2serve</div>
         <nav>
             <a href="customer_dashboard.php" class="nav-link">Dashboard</a>
             <a href="customer_profile.php" class="nav-link">Profile</a>

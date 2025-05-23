@@ -303,7 +303,7 @@ ul li{
 </head>
 <body>
     <header>
-        <div class="logo">Saapaadu</div>
+        <div class="logo">Left2serve</div>
         <nav>
             <a href="homepage.html" class="nav-link">Home</a>
             <a href="login.php" class="nav-link">Login</a>

@@ -480,7 +480,7 @@ $conn->close();
 </head>
 <body>
     <header>
-        <div class="logo">Saapaadu</div>
+        <div class="logo">Left2serve</div>
         <nav>
             <a href="vendor_dashboard.php" class="nav-link">Dashboard</a>
             <a href="vendor_orders.php" class="nav-link">Orders</a>
